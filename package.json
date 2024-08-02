@@ -1,0 +1,24 @@
+{
+  "name": "kube-wb-service-registry",
+  "version": "0.1.0",
+  "description": "Publishes kubernetes service info to worterbuch",
+  "main": "dist/index.js",
+  "scripts": {
+    "debug": "npm run build && node dist",
+    "build": "npx tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/babymotte/kube-wb-service-registry.git"
+  },
+  "author": "Michael Bachmann",
+  "license": "AGPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/babymotte/kube-wb-service-registry/issues"
+  },
+  "homepage": "https://github.com/babymotte/kube-wb-service-registry#readme",
+  "devDependencies": {
+    "@types/node": "^22.1.0",
+    "typescript": "^5.5.4"
+  }
+}
