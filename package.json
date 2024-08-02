@@ -11,7 +11,10 @@
     "type": "git",
     "url": "git+https://github.com/babymotte/kube-wb-service-registry.git"
   },
-  "author": "Michael Bachmann",
+  "author": {
+    "name": "Michael Bachmann",
+    "email": "mbachmann@bbmsoft.net"
+  },
   "license": "AGPL-3.0-or-later",
   "bugs": {
     "url": "https://github.com/babymotte/kube-wb-service-registry/issues"
@@ -20,5 +23,9 @@
   "devDependencies": {
     "@types/node": "^22.1.0",
     "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "@kubernetes/client-node": "^0.21.0",
+    "worterbuch-js": "^0.45.6"
   }
 }
