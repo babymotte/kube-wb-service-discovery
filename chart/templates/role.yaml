@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: { { include "kube-wb-service-discovery.fullname" . } }
+  name: {{ include "kube-wb-service-discovery.fullname" . }}
 rules:
   - apiGroups: [""] # "" indicates the core API group
     resources: ["services", "nodes"]
@@ -10,13 +10,13 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: { { include "kube-wb-service-discovery.fullname" . } }
+  name: {{ include "kube-wb-service-discovery.fullname" . }}
 subjects:
   - kind: ServiceAccount
-    name: { { include "kube-wb-service-discovery.fullname" . } }
-    namespace: { { .Release.Namespace } }
+    name: {{ include "kube-wb-service-discovery.fullname" . }}
+    namespace: {{ .Release.Namespace }}
     apiGroup: ""
 roleRef:
   kind: ClusterRole
-  name: { { include "kube-wb-service-discovery.fullname" . } }
+  name: {{ include "kube-wb-service-discovery.fullname" . }}
   apiGroup: ""
