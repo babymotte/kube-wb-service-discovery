@@ -286,22 +286,28 @@ const main = async () => {
 
   wb.setGraveGoods([PREFIX + "/#"]);
 
-  const stop = (status: number) => {
-    wb.close();
-    process.exit(status);
-  };
-
   try {
     // await publishNodePorts("default", wb);
     const stopNodePortWatch = await watchNodePorts("default", wb);
     const stopIngressWatch = await watchIngresses("default", wb);
+
+    const stop = () => {
+      wb.close();
+      stopNodePortWatch();
+      stopIngressWatch();
+      process.exit(0);
+    };
+
+    process.on("SIGINT", stop);
+    process.on("SIGHUP", stop);
+    process.on("SIGTERM", stop);
   } catch (err: any) {
     if (err.message) {
       console.error(err);
     } else {
       console.error(err);
     }
-    stop(1);
+    process.exit(1);
   }
 };
 
