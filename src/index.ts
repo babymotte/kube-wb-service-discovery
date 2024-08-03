@@ -284,7 +284,7 @@ async function watchIngresses(
 
 const main = async () => {
   // TODO get wb addrss from env
-  const wb = await connect(`tcp://${WB_PORT}:${WB_PORT}`);
+  const wb = await connect(`tcp://${WB_HOST}:${WB_PORT}`);
 
   wb.setGraveGoods([PREFIX + "/#"]);
 

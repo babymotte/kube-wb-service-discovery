@@ -110,3 +110,7 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+worterbuch:
+  host: "worterbuch.homelab"
+  port: "30090"
