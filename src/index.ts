@@ -26,6 +26,8 @@ import {
   resolveChild,
 } from "./utils";
 
+const WB_HOST = process.env.WORTERBUCH_HOST_ADDRESS || "worterbuch.homelab";
+const WB_PORT = process.env.WORTERBUCH_PORT || "30090";
 const PREFIX = process.env.KUBERNETES_WB_PREFIX || "kubernetes/services";
 
 const SERVICES = {};
@@ -282,7 +284,7 @@ async function watchIngresses(
 
 const main = async () => {
   // TODO get wb addrss from env
-  const wb = await connect("tcp://worterbuch.homelab:30090");
+  const wb = await connect(`tcp://${WB_PORT}:${WB_PORT}`);
 
   wb.setGraveGoods([PREFIX + "/#"]);
 
