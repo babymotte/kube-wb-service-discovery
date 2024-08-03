@@ -2,14 +2,14 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: {{ include "kube-wb-service-registry.fullname" . }}
+  name: {{ include "kube-wb-service-discovery.fullname" . }}
   labels:
-    {{- include "kube-wb-service-registry.labels" . | nindent 4 }}
+    {{- include "kube-wb-service-discovery.labels" . | nindent 4 }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: {{ include "kube-wb-service-registry.fullname" . }}
+    name: {{ include "kube-wb-service-discovery.fullname" . }}
   minReplicas: {{ .Values.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.autoscaling.maxReplicas }}
   metrics:

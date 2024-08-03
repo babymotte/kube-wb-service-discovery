@@ -1,5 +1,5 @@
 apiVersion: v2
-name: kube-wb-service-registry
+name: kube-wb-service-discovery
 description: Kubernetes service registry for Worterbuch
 
 # A chart can be either an 'application' or a 'library' chart.

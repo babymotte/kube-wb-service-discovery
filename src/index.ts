@@ -57,10 +57,24 @@ const main = async () => {
   // TODO get wb addrss from env
   const wb = await connect("tcp://worterbuch.homelab:30090");
 
-  const k8sApi = getK8sApi();
-  //   const namespaces = await getNamespaces(k8sApi);
+  const stop = (status: number) => {
+    wb.close();
+    process.exit(status);
+  };
 
-  await publishNodePorts(k8sApi, "default", wb);
+  try {
+    const k8sApi = getK8sApi();
+    //   const namespaces = await getNamespaces(k8sApi);
+
+    await publishNodePorts(k8sApi, "default", wb);
+  } catch (err: any) {
+    if (err.message) {
+      console.error(err);
+    } else {
+      console.error(err);
+    }
+    stop(1);
+  }
 };
 
 main();
@@ -80,7 +94,14 @@ async function getNamespaces(k8sApi: CoreV1Api): Promise<string[]> {
 
 function getK8sApi(): CoreV1Api {
   const kc = new KubeConfig();
-  kc.loadFromDefault();
+
+  if (process.env.KUBE_API_FROM_CLUSTER === "true") {
+    console.info("Loading k8s config from cluster");
+    kc.loadFromCluster();
+  } else {
+    console.info("Loading k8s config from default");
+    kc.loadFromDefault();
+  }
   const k8sApi = kc.makeApiClient(CoreV1Api);
   return k8sApi;
 }
