@@ -15,12 +15,24 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { KubeConfig, CoreV1Api } from "@kubernetes/client-node";
+import { KubeConfig, CoreV1Api, Watch } from "@kubernetes/client-node";
 import { connect, Worterbuch } from "worterbuch-js";
+import {
+  deleteChild,
+  insertChild,
+  kubeApi,
+  kubeWatch,
+  publishObject,
+  resolveChild,
+} from "./utils";
 
 const PREFIX = process.env.KUBERNETES_WB_PREFIX || "kubernetes/services";
 
-async function getClusterIp(k8sApi: CoreV1Api): Promise<string | undefined> {
+const SERVICES = {};
+
+async function getClusterIp(): Promise<string | undefined> {
+  const k8sApi = kubeApi();
+
   // TODO try to get kube-vip
 
   const nodeRes = await k8sApi.listNode();
@@ -37,42 +49,242 @@ async function getClusterIp(k8sApi: CoreV1Api): Promise<string | undefined> {
   return undefined;
 }
 
-async function publishNodePorts(
-  k8sApi: CoreV1Api,
+async function watchNodePorts(
   namespace: string,
   wb: Worterbuch
-) {
-  const svcRes = await k8sApi.listNamespacedService(namespace);
-
-  const clusterIp = await getClusterIp(k8sApi);
+): Promise<() => void> {
+  const clusterIp = await getClusterIp();
   if (!clusterIp) {
-    return;
+    return () => {};
   }
 
-  for (const item of svcRes.body.items) {
-    if (item.metadata?.namespace && item.metadata?.name && item.spec?.ports) {
-      for (const port of item.spec?.ports) {
-        if (port.name) {
-          if (port.nodePort) {
-            console.info(
-              `Found NodePort service endpoint for ${item.metadata?.name}:`,
-              `${port.name}://${clusterIp}:${port.nodePort}`
-            );
+  let resourceVersion = 0;
+  let restartWatch = true;
+  const stopRef: { current: (() => void) | null } = { current: null };
+  const renewWatchRef: { current: (() => void) | null } = { current: null };
 
-            wb.set(
-              `${PREFIX}/${item.metadata?.namespace}/${item.metadata?.name}/${port.name}`,
-              `${port.name}://${clusterIp}:${port.nodePort}`
-            );
+  const watch = kubeWatch();
+
+  const stopWatch = () => {
+    restartWatch = false;
+    if (stopRef.current) {
+      stopRef.current();
+      stopRef.current = null;
+    }
+  };
+
+  renewWatchRef.current = async () => {
+    stopWatch();
+
+    const req = await watch.watch(
+      "/api/v1/services",
+      // optional query parameters can go here.
+      {
+        allowWatchBookmarks: true,
+      },
+      // callback is called for each received object.
+      (type, apiObj, watchObj) => {
+        if (type === "BOOKMARK") {
+          console.log("watchObj", watchObj);
+          if (watchObj?.object?.metadata?.resourceVersion) {
+            resourceVersion = watchObj.object.metadata.resourceVersion;
+            console.log(`resourceVersion:`, resourceVersion);
+          }
+          return;
+        }
+
+        if (
+          (type === "MODIFIED" || type === "DELETED") &&
+          apiObj.metadata?.namespace === namespace &&
+          apiObj.metadata?.name
+        ) {
+          deleteChild(SERVICES, [
+            apiObj.metadata.namespace,
+            apiObj.metadata.name,
+            "nodePort",
+          ]);
+        }
+
+        if (
+          apiObj.metadata?.namespace === namespace &&
+          apiObj.metadata?.name &&
+          apiObj.spec?.ports
+        ) {
+          for (const port of apiObj.spec.ports) {
+            if (port.name) {
+              if (port.nodePort) {
+                if (type === "ADDED" || type === "MODIFIED") {
+                  console.info(
+                    `Found NodePort service endpoint for ${apiObj.metadata.name}:`,
+                    `${port.name}://${clusterIp}:${port.nodePort}`
+                  );
+
+                  insertChild(
+                    SERVICES,
+                    [
+                      apiObj.metadata.namespace,
+                      apiObj.metadata.name,
+                      "nodePort",
+                      port.name,
+                    ],
+                    [`${port.name}://${clusterIp}:${port.nodePort}`]
+                  );
+                }
+              }
+            }
           }
         }
+
+        wb.pDelete(PREFIX + "/#");
+        publishObject(PREFIX, SERVICES, wb);
+      },
+      // done callback is called if the watch terminates normally
+      (err) => {
+        if (restartWatch && renewWatchRef.current) {
+          renewWatchRef.current();
+        }
+        console.error(err);
       }
-    }
+    );
+
+    stopWatch();
+    stopRef.current = () => {
+      console.info("stopping watch");
+      req.abort();
+    };
+  };
+
+  renewWatchRef.current();
+
+  return stopWatch;
+}
+
+async function watchIngresses(
+  namespace: string,
+  wb: Worterbuch
+): Promise<() => void> {
+  const clusterIp = await getClusterIp();
+  if (!clusterIp) {
+    return () => {};
   }
+
+  let resourceVersion = 0;
+  let restartWatch = true;
+  const stopRef: { current: (() => void) | null } = { current: null };
+  const renewWatchRef: { current: (() => void) | null } = { current: null };
+
+  const watch = kubeWatch();
+
+  const stopWatch = () => {
+    restartWatch = false;
+    if (stopRef.current) {
+      stopRef.current();
+      stopRef.current = null;
+    }
+  };
+
+  renewWatchRef.current = async () => {
+    stopWatch();
+
+    const req = await watch.watch(
+      `/apis/networking.k8s.io/v1/namespaces/${namespace}/ingresses`,
+      // optional query parameters can go here.
+      {
+        allowWatchBookmarks: true,
+      },
+      // callback is called for each received object.
+      (type, apiObj, watchObj) => {
+        if (type === "BOOKMARK") {
+          console.log("watchObj", watchObj);
+          if (watchObj?.object?.metadata?.resourceVersion) {
+            resourceVersion = watchObj.object.metadata.resourceVersion;
+            console.log(`resourceVersion:`, resourceVersion);
+          }
+          return;
+        }
+
+        if (
+          apiObj.metadata?.namespace === namespace &&
+          apiObj.metadata?.name &&
+          apiObj.spec?.rules
+        ) {
+          if (type === "MODIFIED" || type === "DELETED") {
+            for (const rule of apiObj.spec.rules) {
+              for (const protoName of Object.keys(rule)) {
+                const proto = rule[protoName];
+                if (proto.paths) {
+                  for (const pathDef of proto.paths) {
+                    if (pathDef.path && pathDef.backend?.service?.name) {
+                      const port =
+                        pathDef.backend.service.port?.name || protoName;
+                      const serviceName = pathDef.backend.service.name;
+                      deleteChild(SERVICES, [
+                        namespace,
+                        serviceName,
+                        "ingress",
+                        port,
+                      ]);
+                    }
+                  }
+                }
+              }
+            }
+          }
+          if (type === "ADDED" || type === "MODIFIED") {
+            for (const rule of apiObj.spec.rules) {
+              let host = rule.host || clusterIp;
+              for (const protoName of Object.keys(rule)) {
+                const proto = rule[protoName];
+                if (proto.paths) {
+                  for (const pathDef of proto.paths) {
+                    if (pathDef.path && pathDef.backend?.service?.name) {
+                      const port =
+                        pathDef.backend.service.port?.name || protoName;
+                      const serviceName = pathDef.backend.service.name;
+                      const url = `${port}://${host}${pathDef.path}`;
+                      const endpoints = resolveChild(
+                        SERVICES,
+                        [namespace, serviceName, "ingress", port],
+                        () => []
+                      );
+                      endpoints.push(url);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        wb.pDelete(PREFIX + "/#");
+        publishObject(PREFIX, SERVICES, wb);
+      },
+      // done callback is called if the watch terminates normally
+      (err) => {
+        if (restartWatch && renewWatchRef.current) {
+          renewWatchRef.current();
+        }
+        console.error(err);
+      }
+    );
+
+    stopWatch();
+    stopRef.current = () => {
+      console.info("stopping watch");
+      req.abort();
+    };
+  };
+
+  renewWatchRef.current();
+
+  return stopWatch;
 }
 
 const main = async () => {
   // TODO get wb addrss from env
   const wb = await connect("tcp://worterbuch.homelab:30090");
+
+  wb.setGraveGoods([PREFIX + "/#"]);
 
   const stop = (status: number) => {
     wb.close();
@@ -80,10 +292,9 @@ const main = async () => {
   };
 
   try {
-    const k8sApi = getK8sApi();
-    //   const namespaces = await getNamespaces(k8sApi);
-
-    await publishNodePorts(k8sApi, "default", wb);
+    // await publishNodePorts("default", wb);
+    const stopNodePortWatch = await watchNodePorts("default", wb);
+    const stopIngressWatch = await watchIngresses("default", wb);
   } catch (err: any) {
     if (err.message) {
       console.error(err);
@@ -107,18 +318,4 @@ async function getNamespaces(k8sApi: CoreV1Api): Promise<string[]> {
   }
 
   return namespaces;
-}
-
-function getK8sApi(): CoreV1Api {
-  const kc = new KubeConfig();
-
-  if (process.env.KUBE_API_FROM_CLUSTER === "true") {
-    console.info("Loading k8s config from cluster");
-    kc.loadFromCluster();
-  } else {
-    console.info("Loading k8s config from default");
-    kc.loadFromDefault();
-  }
-  const k8sApi = kc.makeApiClient(CoreV1Api);
-  return k8sApi;
 }
