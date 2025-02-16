@@ -32,9 +32,7 @@ const PREFIX = process.env.KUBERNETES_WB_PREFIX || "kubernetes/services";
 
 const SERVICES = {};
 
-async function getClusterIp(): Promise<string | undefined> {
-  const k8sApi = kubeApi();
-
+async function getClusterIp(k8sApi: CoreV1Api): Promise<string | undefined> {
   // TODO try to get kube-vip
 
   const nodeRes = await k8sApi.listNode();
@@ -52,10 +50,11 @@ async function getClusterIp(): Promise<string | undefined> {
 }
 
 async function watchNodePorts(
+  k8sApi: CoreV1Api,
   namespace: string,
   wb: Worterbuch
 ): Promise<() => void> {
-  const clusterIp = await getClusterIp();
+  const clusterIp = await getClusterIp(k8sApi);
   if (!clusterIp) {
     return () => {};
   }
@@ -162,10 +161,11 @@ async function watchNodePorts(
 }
 
 async function watchIngresses(
+  k8sApi: CoreV1Api,
   namespace: string,
   wb: Worterbuch
 ): Promise<() => void> {
-  const clusterIp = await getClusterIp();
+  const clusterIp = await getClusterIp(k8sApi);
   if (!clusterIp) {
     return () => {};
   }
@@ -283,20 +283,30 @@ async function watchIngresses(
 }
 
 const main = async () => {
+  const k8sApi = kubeApi();
+
   // TODO get wb addrss from env
   const wb = await connect(`tcp://${WB_HOST}:${WB_PORT}`);
 
   wb.setGraveGoods([PREFIX + "/#"]);
 
+  const stopTasks: (() => void)[] = [];
+
   try {
     // await publishNodePorts("default", wb);
-    const stopNodePortWatch = await watchNodePorts("default", wb);
-    const stopIngressWatch = await watchIngresses("default", wb);
+
+    const namespaces = await getNamespaces(k8sApi);
+
+    for (const namespace of namespaces) {
+      stopTasks.push(await watchNodePorts(k8sApi, namespace, wb));
+      stopTasks.push(await watchIngresses(k8sApi, namespace, wb));
+    }
 
     const stop = () => {
       wb.close();
-      stopNodePortWatch();
-      stopIngressWatch();
+      for (const task of stopTasks) {
+        task();
+      }
       process.exit(0);
     };
 
