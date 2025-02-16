@@ -1,6 +1,6 @@
 {
   "name": "kube-wb-service-discovery",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Publishes kubernetes service info to worterbuch",
   "main": "dist/index.js",
   "scripts": {
@@ -26,6 +26,6 @@
   },
   "dependencies": {
     "@kubernetes/client-node": "^0.21.0",
-    "worterbuch-js": "^0.45.6"
+    "worterbuch-js": "^1.0.1"
   }
 }
