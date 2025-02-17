@@ -1,7 +1,9 @@
 import { CoreV1Api, KubeConfig, Watch } from "@kubernetes/client-node";
 import { Worterbuch } from "worterbuch-js";
 
-function kubeConfig(): KubeConfig {
+const config = loadKubeConfig();
+
+function loadKubeConfig(): KubeConfig {
   const kc = new KubeConfig();
 
   if (process.env.KUBE_API_FROM_CLUSTER === "true") {
@@ -13,6 +15,10 @@ function kubeConfig(): KubeConfig {
   }
 
   return kc;
+}
+
+function kubeConfig(): KubeConfig {
+  return config;
 }
 
 export function kubeApi(): CoreV1Api {

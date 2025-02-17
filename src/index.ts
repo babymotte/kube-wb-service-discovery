@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { KubeConfig, CoreV1Api, Watch } from "@kubernetes/client-node";
+import { CoreV1Api } from "@kubernetes/client-node";
 import { connect, Worterbuch } from "worterbuch-js";
 import {
   deleteChild,
@@ -26,8 +26,7 @@ import {
   resolveChild,
 } from "./utils";
 
-const WB_HOST = process.env.WORTERBUCH_HOST_ADDRESS || "worterbuch.homelab";
-const WB_PORT = process.env.WORTERBUCH_PORT || "30090";
+const WB_SERVERS = process.env.WORTERBUCH_SERVERS || "worterbuch.homelab:30090";
 const PREFIX = process.env.KUBERNETES_WB_PREFIX || "kubernetes/services";
 
 const SERVICES = {};
@@ -242,6 +241,10 @@ async function watchIngresses(
                     if (pathDef.path && pathDef.backend?.service?.name) {
                       const port =
                         pathDef.backend.service.port?.name || protoName;
+                      console.info(
+                        `Found Ingress service endpoint for ${apiObj.metadata.name}:`,
+                        `${port}://${host}${pathDef.path}`
+                      );
                       const serviceName = pathDef.backend.service.name;
                       const url = `${port}://${host}${pathDef.path}`;
                       const endpoints = resolveChild(
@@ -285,10 +288,13 @@ async function watchIngresses(
 const main = async () => {
   const k8sApi = kubeApi();
 
-  // TODO get wb addrss from env
-  const wb = await connect(`tcp://${WB_HOST}:${WB_PORT}`);
+  const addresses = WB_SERVERS.split(",").map((s) => `tcp://${s}`);
 
+  const wb = await connect(addresses);
+
+  wb.setClientName("kube-service-discovery");
   wb.setGraveGoods([PREFIX + "/#"]);
+  wb.onclose = () => process.exit(1);
 
   const stopTasks: (() => void)[] = [];
 
