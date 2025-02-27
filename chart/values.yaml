@@ -112,5 +112,4 @@ tolerations: []
 affinity: {}
 
 worterbuch:
-  host: "worterbuch.homelab"
-  port: "30090"
+  servers: wb.homelab:30091,wb.homelab:30092,wb.homelab:30093

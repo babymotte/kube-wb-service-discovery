@@ -53,10 +53,8 @@ spec:
           env:
             - name: KUBE_API_FROM_CLUSTER
               value: "true"
-            - name: WORTERBUCH_HOST_ADDRESS
-              value: "{{ .Values.worterbuch.host }}"
-            - name: WORTERBUCH_PORT
-              value: "{{ .Values.worterbuch.port }}"
+            - name: WORTERBUCH_SERVERS
+              value: "{{ .Values.worterbuch.servers }}"
       {{- with .Values.volumes }}
       volumes:
         {{- toYaml . | nindent 8 }}
